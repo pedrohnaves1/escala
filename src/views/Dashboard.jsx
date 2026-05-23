@@ -291,7 +291,7 @@ export default function Dashboard({ setActiveTab }) {
               Estes voluntários foram escalados, mas ainda não responderam se poderão servir:
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "300px", overflowY: "auto" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", maxHeight: "300px", overflowY: "auto", paddingRight: "0.5rem" }}>
               {pendingItems.length > 0 ? (
                 pendingItems.map((p, idx) => {
                   const s = getServiceDetails(p.serviceId);

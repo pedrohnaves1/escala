@@ -633,13 +633,13 @@ export default function Escalas() {
                               <div key={opt.id} style={{ position: "relative", overflow: "hidden", background: "rgba(0,0,0,0.15)", border: "1px solid var(--glass-border)", padding: "0.75rem 1rem", borderRadius: "var(--radius-md)" }}>
                                 <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${percentage}%`, background: "rgba(139, 92, 246, 0.1)", transition: "width 0.4s ease" }}></div>
 
-                                <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                    <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{opt.title}</span>
-                                    <span className="badge badge-primary" style={{ fontSize: "0.65rem" }}>Tom: {opt.key}</span>
+                                <div style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.75rem" }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: 1, minWidth: 0, flexWrap: "wrap" }}>
+                                    <span style={{ fontWeight: 600, fontSize: "0.9rem", overflowWrap: "anywhere" }}>{opt.title}</span>
+                                    <span className="badge badge-primary" style={{ fontSize: "0.65rem", whiteSpace: "nowrap" }}>Tom: {opt.key}</span>
                                   </div>
-                                  <span className="badge badge-success" style={{ fontSize: "0.7rem", fontWeight: 700 }}>
-                                    {votersCount} voto(s) ({percentage}%)
+                                  <span className="badge badge-success" style={{ fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                    {votersCount} {votersCount === 1 ? "voto" : "votos"} ({percentage}%)
                                   </span>
                                 </div>
                               </div>

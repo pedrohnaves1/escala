@@ -15,7 +15,8 @@ import {
   Sparkles,
   MapPin,
   CheckCircle,
-  ExternalLink
+  ExternalLink,
+  Trash2
 } from "lucide-react";
 import { getVolunteers, getMinistries } from "../utils/storage";
 

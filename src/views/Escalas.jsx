@@ -488,14 +488,16 @@ export default function Escalas() {
               
               {/* Card Resumo do Culto Ativo */}
               <div className="card" style={{ marginBottom: "1.5rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem" }}>
+                <div className="service-header-card">
                   <div>
-                    <h2 style={{ fontSize: "1.5rem", color: "var(--text-active)" }}>{activeService.title}</h2>
-                    <p style={{ color: "var(--text-secondary)", fontSize: "0.875rem", marginTop: "0.25rem" }}>
-                      📅 {new Date(activeService.date + "T00:00:00").toLocaleDateString("pt-BR", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} • ⏰ {activeService.time}
+                    <h2 style={{ fontSize: "1.5rem", color: "var(--text-active)", lineHeight: 1.2 }}>{activeService.title}</h2>
+                    <p style={{ color: "var(--text-secondary)", fontSize: "0.85rem", marginTop: "0.35rem", display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+                      <span>📅 {new Date(activeService.date + "T00:00:00").toLocaleDateString("pt-BR", { weekday: 'long', day: 'numeric', month: 'short' })}</span>
+                      <span style={{ color: "var(--glass-border)" }}>•</span>
+                      <span>⏰ {activeService.time}</span>
                     </p>
                   </div>
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <div className="service-buttons" style={{ display: "flex", gap: "0.5rem" }}>
                     <button className="btn btn-secondary" onClick={handleGenerateWhatsappText}>
                       <Share2 size={16} /> WhatsApp
                     </button>
@@ -505,7 +507,7 @@ export default function Escalas() {
                   </div>
                 </div>
                 {activeService.description && (
-                  <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", borderLeft: "2px solid var(--glass-border)", paddingLeft: "0.75rem", fontStyle: "italic" }}>
+                  <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem", borderLeft: "2px solid var(--glass-border)", paddingLeft: "0.75rem", fontStyle: "italic", marginTop: "0.75rem" }}>
                     {activeService.description}
                   </p>
                 )}

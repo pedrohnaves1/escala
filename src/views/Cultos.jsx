@@ -14,7 +14,12 @@ import {
   Sparkles,
   Settings,
   PlusCircle,
-  FolderPlus
+  FolderPlus,
+  Repeat,
+  ShieldAlert,
+  Zap,
+  Bot,
+  Timer
 } from "lucide-react";
 import {
   getServices,
@@ -73,7 +78,11 @@ export default function Cultos() {
       time: "",
       description: "",
       requiredRoles: [],
-      setlist: []
+      setlist: [],
+      escalationMode: "padrao",
+      recurrence: "unica",
+      recurrenceCount: 4,
+      autoTrigger: null
     });
     setIsServiceModalOpen(true);
   };
@@ -86,7 +95,11 @@ export default function Cultos() {
       time: service.time,
       description: service.description || "",
       requiredRoles: service.requiredRoles ? [...service.requiredRoles] : [],
-      setlist: service.setlist ? [...service.setlist] : []
+      setlist: service.setlist ? [...service.setlist] : [],
+      escalationMode: service.escalationMode || "padrao",
+      recurrence: "unica", // Edição não gera recorrência novamente
+      recurrenceCount: 4,
+      autoTrigger: service.autoTrigger || null
     });
     setIsServiceModalOpen(true);
   };
@@ -133,7 +146,7 @@ export default function Cultos() {
     });
   };
 
-  // Salvar Culto
+  // Salvar Culto (com suporte a recorrência)
   const handleSaveService = (e) => {
     e.preventDefault();
     if (!serviceForm.title.trim() || !serviceForm.date || !serviceForm.time) {
@@ -143,16 +156,40 @@ export default function Cultos() {
 
     let updated;
     if (editingServiceId) {
+      // Edição simples (sem gerar recorrência)
       updated = services.map(s => 
-        s.id === editingServiceId ? { ...s, ...serviceForm } : s
+        s.id === editingServiceId ? {
+          ...s,
+          title: serviceForm.title,
+          date: serviceForm.date,
+          time: serviceForm.time,
+          description: serviceForm.description,
+          requiredRoles: serviceForm.requiredRoles,
+          escalationMode: serviceForm.escalationMode,
+          autoTrigger: serviceForm.escalationMode === "automatico" ? (serviceForm.autoTrigger || { enabled: true, daysBeforeEvent: 3 }) : s.autoTrigger
+        } : s
       );
     } else {
-      const newService = {
-        id: `s_${Date.now()}`,
-        ...serviceForm,
-        setlist: [] // Inicializa setlist vazia
-      };
-      updated = [...services, newService];
+      // Gerar lista de datas baseado na recorrência
+      const dates = generateRecurrenceDates(
+        serviceForm.date,
+        serviceForm.recurrence,
+        serviceForm.recurrenceCount
+      );
+
+      const newServices = dates.map((d, idx) => ({
+        id: `s_${Date.now()}_${idx}`,
+        title: serviceForm.title,
+        date: d,
+        time: serviceForm.time,
+        description: serviceForm.description,
+        requiredRoles: [...serviceForm.requiredRoles],
+        setlist: [],
+        escalationMode: serviceForm.escalationMode,
+        autoTrigger: serviceForm.escalationMode === "automatico" ? { enabled: true, daysBeforeEvent: 3 } : null
+      }));
+
+      updated = [...services, ...newServices];
     }
 
     // Ordena os cultos por data
@@ -161,6 +198,39 @@ export default function Cultos() {
     saveServices(updated);
     setServices(updated);
     setIsServiceModalOpen(false);
+
+    // Feedback de recorrência criada
+    if (!editingServiceId && serviceForm.recurrence !== "unica") {
+      const count = generateRecurrenceDates(serviceForm.date, serviceForm.recurrence, serviceForm.recurrenceCount).length;
+      const labels = { semanal: "semanais", quinzenal: "quinzenais", mensal: "mensais" };
+      alert(`✅ ${count} cultos ${labels[serviceForm.recurrence]} criados com sucesso a partir de ${new Date(serviceForm.date + "T00:00:00").toLocaleDateString("pt-BR")}!`);
+    }
+  };
+
+  // Gera as datas recorrentes
+  const generateRecurrenceDates = (startDate, recurrence, count) => {
+    if (recurrence === "unica") return [startDate];
+
+    const dates = [];
+    const start = new Date(startDate + "T00:00:00");
+
+    for (let i = 0; i < count; i++) {
+      const d = new Date(start);
+      if (recurrence === "semanal") {
+        d.setDate(d.getDate() + (i * 7));
+      } else if (recurrence === "quinzenal") {
+        d.setDate(d.getDate() + (i * 14));
+      } else if (recurrence === "mensal") {
+        d.setMonth(d.getMonth() + i);
+      }
+      // Formata como YYYY-MM-DD
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      dates.push(`${yyyy}-${mm}-${dd}`);
+    }
+
+    return dates;
   };
 
   // --- CONTROLE DE MINISTÉRIOS E FUNÇÕES ---
@@ -470,6 +540,116 @@ export default function Cultos() {
                     value={serviceForm.description}
                     onChange={handleServiceChange}
                   />
+                </div>
+
+                {/* Recorrência (apenas ao criar) */}
+                {!editingServiceId && (
+                  <div style={{ padding: "1rem 1.25rem", background: "rgba(255,255,255,0.015)", borderRadius: "var(--radius-md)", border: "1px solid var(--glass-border)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                      <Repeat size={16} style={{ color: "var(--primary)" }} />
+                      <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-secondary)" }}>Recorrência</span>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                      {[
+                        { value: "unica", label: "\u00danica", icon: null },
+                        { value: "semanal", label: "Semanal", icon: null },
+                        { value: "quinzenal", label: "Quinzenal", icon: null },
+                        { value: "mensal", label: "Mensal", icon: null }
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={`btn ${serviceForm.recurrence === opt.value ? "btn-primary" : "btn-secondary"}`}
+                          onClick={() => setServiceForm(prev => ({ ...prev, recurrence: opt.value }))}
+                          style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", borderRadius: "9999px" }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {serviceForm.recurrence !== "unica" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem 0.75rem", background: "rgba(99, 102, 241, 0.06)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(99, 102, 241, 0.2)" }}>
+                        <Timer size={14} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>Repetir por</span>
+                        <select
+                          className="form-select"
+                          value={serviceForm.recurrenceCount}
+                          onChange={(e) => setServiceForm(prev => ({ ...prev, recurrenceCount: parseInt(e.target.value) }))}
+                          style={{ width: "70px", padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "center" }}
+                        >
+                          {[2,3,4,5,6,8,10,12,16,20,24].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                          {serviceForm.recurrence === "semanal" ? "semanas" : serviceForm.recurrence === "quinzenal" ? "quinzenas" : "meses"}
+                        </span>
+                        {serviceForm.date && (
+                          <span className="badge badge-info" style={{ fontSize: "0.65rem", marginLeft: "auto" }}>
+                            {serviceForm.recurrenceCount} cultos serão criados
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Modo de Escalação */}
+                <div style={{ padding: "1rem 1.25rem", background: "rgba(255,255,255,0.015)", borderRadius: "var(--radius-md)", border: "1px solid var(--glass-border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <ShieldAlert size={16} style={{ color: "var(--text-secondary)" }} />
+                    <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-secondary)" }}>Modo de Escalação</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                    <button
+                      type="button"
+                      className={`btn ${serviceForm.escalationMode === "padrao" ? "btn-success" : "btn-secondary"}`}
+                      onClick={() => setServiceForm(prev => ({ ...prev, escalationMode: "padrao" }))}
+                      style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "9999px" }}
+                    >
+                      <ShieldAlert size={14} /> Padrão
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${serviceForm.escalationMode === "emergencial" ? "btn-danger" : "btn-secondary"}`}
+                      onClick={() => setServiceForm(prev => ({ ...prev, escalationMode: "emergencial" }))}
+                      style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "9999px" }}
+                    >
+                      <Zap size={14} /> Emergencial
+                    </button>
+                    <button
+                      type="button"
+                      className={`btn ${serviceForm.escalationMode === "automatico" ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setServiceForm(prev => ({ ...prev, escalationMode: "automatico" }))}
+                      style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "9999px" }}
+                    >
+                      <Bot size={14} /> Automático
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    {serviceForm.escalationMode === "padrao" && (
+                      <p style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                        <ShieldAlert size={13} style={{ marginTop: "0.15rem", flexShrink: 0, color: "#10b981" }} />
+                        <span>Somente voluntários sem bloqueios de data ou limites excedidos podem ser escalados.</span>
+                      </p>
+                    )}
+                    {serviceForm.escalationMode === "emergencial" && (
+                      <p style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                        <Zap size={13} style={{ marginTop: "0.15rem", flexShrink: 0, color: "#ef4444" }} />
+                        <span>Chama <em>todos</em>, ignorando bloqueios e limites. Apenas duplo agendamento e conflito de horário são impedidos.</span>
+                      </p>
+                    )}
+                    {serviceForm.escalationMode === "automatico" && (
+                      <p style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                        <Bot size={13} style={{ marginTop: "0.15rem", flexShrink: 0, color: "var(--primary)" }} />
+                        <span>Autoescala disparada automaticamente X dias antes do evento. Configure os dias na aba Escalas após salvar.</span>
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Seleção de quais funções serão necessárias para este culto */}

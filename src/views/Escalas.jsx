@@ -529,7 +529,7 @@ export default function Escalas() {
                       const hasConf = conflicts ? conflicts.doubleBooked || conflicts.blackoutConflict : false;
 
                       return (
-                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 1rem", background: isFilled ? "rgba(255, 255, 255, 0.01)" : "rgba(239, 68, 68, 0.02)", border: isFilled ? "1px solid var(--glass-border)" : "1px dashed rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-md)" }}>
+                        <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", padding: "0.75rem 1rem", background: isFilled ? "rgba(255, 255, 255, 0.01)" : "rgba(239, 68, 68, 0.02)", border: isFilled ? "1px solid var(--glass-border)" : "1px dashed rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-md)" }}>
                           
                           {/* Coluna 1: Nome da Função & Ministério */}
                           <div>

@@ -21,7 +21,12 @@ import {
   FileText,
   UserPlus,
   PlusCircle,
-  ExternalLink
+  ExternalLink,
+  Zap,
+  ShieldAlert,
+  Bot,
+  Settings2,
+  Timer
 } from "lucide-react";
 import {
   getServices,
@@ -101,13 +106,49 @@ export default function Escalas() {
 
   const activeService = services.find(s => s.id === selectedServiceId);
 
+  // Modo de escalação do culto ativo
+  const activeEscalationMode = activeService?.escalationMode || "padrao";
+
+  // --- CONTROLE DE ESCALAÇÃO ---
+
+  // Altera o modo de escalação do culto
+  const handleChangeEscalationMode = (newMode) => {
+    const updatedServices = services.map(s => {
+      if (s.id === selectedServiceId) {
+        return {
+          ...s,
+          escalationMode: newMode,
+          // Se ativar automático, salvar config padrão se não existir
+          autoTrigger: newMode === "automatico" ? (s.autoTrigger || { enabled: true, daysBeforeEvent: 3 }) : s.autoTrigger
+        };
+      }
+      return s;
+    });
+    saveServices(updatedServices);
+    setServices(updatedServices);
+  };
+
+  // Altera quantos dias antes do evento o automático é disparado
+  const handleChangeAutoTriggerDays = (days) => {
+    const updatedServices = services.map(s => {
+      if (s.id === selectedServiceId) {
+        return {
+          ...s,
+          autoTrigger: { ...(s.autoTrigger || {}), enabled: true, daysBeforeEvent: parseInt(days) || 3 }
+        };
+      }
+      return s;
+    });
+    saveServices(updatedServices);
+    setServices(updatedServices);
+  };
+
   // --- CONTROLE DE ESCALAS ---
 
-  // Abre modal de atribuição
+  // Abre modal de atribuição — passa o modo de escalação ativo
   const handleOpenAssignModal = (ministryId, roleId) => {
     setActiveSlot({ ministryId, roleId });
-    // Carregar sugestões ordenadas pelo algoritmo
-    const recs = getRecommendedVolunteers(selectedServiceId, ministryId, roleId);
+    const recs = getRecommendedVolunteers(selectedServiceId, ministryId, roleId, activeEscalationMode);
     setRecommendations(recs);
     setIsAssignModalOpen(true);
   };
@@ -163,15 +204,17 @@ export default function Escalas() {
     setAssignments(updated);
   };
 
-  // ⚡ Executar Autoescala de 1-Clique
+  // ⚡ Executar Autoescala de 1-Clique — passa o modo de escalação
   const handleRunAutoScale = () => {
     if (!selectedServiceId) return;
-    const result = runAutoScaleForService(selectedServiceId);
+    const mode = activeEscalationMode === "automatico" ? "padrao" : activeEscalationMode;
+    const result = runAutoScaleForService(selectedServiceId, mode);
     
     if (result.success) {
       saveAssignments(result.newAssignments);
       setAssignments(result.newAssignments);
-      alert(`⚡ Autoescala concluída! ${result.count} vaga(s) foram preenchidas inteligentemente.`);
+      const modeLabel = mode === "emergencial" ? "🚨 EMERGENCIAL" : "✅ Padrão";
+      alert(`⚡ Autoescala ${modeLabel} concluída! ${result.count} vaga(s) foram preenchidas inteligentemente.`);
     } else {
       alert(`Falha ao rodar autoescala: ${result.message}`);
     }
@@ -446,6 +489,8 @@ export default function Escalas() {
           {services.map(s => {
             const isSelected = s.id === selectedServiceId;
             const stats = getServiceFillStats(s);
+            const sMode = s.escalationMode || "padrao";
+            const modeBadge = sMode === "emergencial" ? { label: "🚨 Emerg.", cls: "badge-danger" } : sMode === "automatico" ? { label: "🤖 Auto", cls: "badge-info" } : null;
 
             return (
               <div
@@ -467,9 +512,16 @@ export default function Escalas() {
                       📅 {new Date(s.date + "T00:00:00").toLocaleDateString("pt-BR")} | ⏰ {s.time}
                     </span>
                   </div>
-                  <span className={`badge ${stats.percent === 100 ? "badge-success" : stats.percent > 0 ? "badge-warning" : "badge-danger"}`} style={{ fontSize: "0.7rem" }}>
-                    {stats.percent}%
-                  </span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
+                    <span className={`badge ${stats.percent === 100 ? "badge-success" : stats.percent > 0 ? "badge-warning" : "badge-danger"}`} style={{ fontSize: "0.7rem" }}>
+                      {stats.percent}%
+                    </span>
+                    {modeBadge && (
+                      <span className={`badge ${modeBadge.cls}`} style={{ fontSize: "0.6rem", padding: "0.1rem 0.35rem" }}>
+                        {modeBadge.label}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Mini Barra de Progresso */}
@@ -501,8 +553,9 @@ export default function Escalas() {
                     <button className="btn btn-secondary" onClick={handleGenerateWhatsappText}>
                       <Share2 size={16} /> WhatsApp
                     </button>
-                    <button className="btn btn-primary" onClick={handleRunAutoScale} title="Escalar automaticamente as vagas em aberto">
-                      <Sparkles size={16} /> Autoescala
+                    <button className={`btn ${activeEscalationMode === "emergencial" ? "btn-danger" : "btn-primary"}`} onClick={handleRunAutoScale} title="Escalar automaticamente as vagas em aberto">
+                      {activeEscalationMode === "emergencial" ? <Zap size={16} /> : <Sparkles size={16} />}
+                      {activeEscalationMode === "emergencial" ? " Autoescala Emergencial" : " Autoescala"}
                     </button>
                   </div>
                 </div>
@@ -511,6 +564,96 @@ export default function Escalas() {
                     {activeService.description}
                   </p>
                 )}
+
+                {/* ── PAINEL DE ESTRATÉGIA DE ESCALAÇÃO ── */}
+                <div style={{ marginTop: "1rem", padding: "1rem 1.25rem", background: "rgba(255,255,255,0.015)", borderRadius: "var(--radius-md)", border: "1px solid var(--glass-border)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                    <Settings2 size={16} style={{ color: "var(--text-secondary)" }} />
+                    <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)" }}>Estratégia de Escalação</span>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    {/* Botão Padrão */}
+                    <button
+                      className={`btn ${activeEscalationMode === "padrao" ? "btn-success" : "btn-secondary"}`}
+                      onClick={() => handleChangeEscalationMode("padrao")}
+                      style={{ padding: "0.5rem 1rem", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "9999px" }}
+                    >
+                      <ShieldAlert size={14} /> Padrão
+                    </button>
+
+                    {/* Botão Emergencial */}
+                    <button
+                      className={`btn ${activeEscalationMode === "emergencial" ? "btn-danger" : "btn-secondary"}`}
+                      onClick={() => handleChangeEscalationMode("emergencial")}
+                      style={{ padding: "0.5rem 1rem", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "9999px" }}
+                    >
+                      <Zap size={14} /> Emergencial
+                    </button>
+
+                    {/* Botão Automático */}
+                    <button
+                      className={`btn ${activeEscalationMode === "automatico" ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => handleChangeEscalationMode("automatico")}
+                      style={{ padding: "0.5rem 1rem", fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.35rem", borderRadius: "9999px" }}
+                    >
+                      <Bot size={14} /> Automático
+                    </button>
+                  </div>
+
+                  {/* Descrição do modo selecionado */}
+                  <div style={{ marginTop: "0.75rem", fontSize: "0.8rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
+                    {activeEscalationMode === "padrao" && (
+                      <p style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                        <ShieldAlert size={14} style={{ marginTop: "0.15rem", flexShrink: 0, color: "#10b981" }} />
+                        <span><strong style={{ color: "var(--text-secondary)" }}>Modo Padrão:</strong> Somente voluntários sem bloqueios de data ou limites excedidos podem ser escalados. Conflitos de horário e duplo agendamento são sempre impedidos.</span>
+                      </p>
+                    )}
+                    {activeEscalationMode === "emergencial" && (
+                      <p style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                        <Zap size={14} style={{ marginTop: "0.15rem", flexShrink: 0, color: "#ef4444" }} />
+                        <span><strong style={{ color: "#fca5a5" }}>Modo Emergencial:</strong> Chama <em>todos</em> os voluntários, mesmo com bloqueios de data e limites excedidos. Apenas duplo agendamento e conflito de horário são impedidos (é fisicamente impossível). Ideal para emergências de última hora.</span>
+                      </p>
+                    )}
+                    {activeEscalationMode === "automatico" && (
+                      <div>
+                        <p style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                          <Bot size={14} style={{ marginTop: "0.15rem", flexShrink: 0, color: "var(--primary)" }} />
+                          <span><strong style={{ color: "var(--text-secondary)" }}>Modo Automático:</strong> A autoescala será disparada automaticamente X dias antes do evento. O preenchimento segue as regras do modo Padrão.</span>
+                        </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.5rem 0.75rem", background: "rgba(99, 102, 241, 0.06)", borderRadius: "var(--radius-sm)", border: "1px solid rgba(99, 102, 241, 0.2)" }}>
+                          <Timer size={14} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                          <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>Disparar</span>
+                          <select
+                            className="form-select"
+                            value={activeService.autoTrigger?.daysBeforeEvent || 3}
+                            onChange={(e) => handleChangeAutoTriggerDays(e.target.value)}
+                            style={{ width: "70px", padding: "0.3rem 0.5rem", fontSize: "0.8rem", textAlign: "center" }}
+                          >
+                            {[1,2,3,5,7,10,14].map(d => (
+                              <option key={d} value={d}>{d}</option>
+                            ))}
+                          </select>
+                          <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>dias antes do evento</span>
+                          {(() => {
+                            const triggerDays = activeService.autoTrigger?.daysBeforeEvent || 3;
+                            const eventDate = new Date(activeService.date + "T00:00:00");
+                            const triggerDate = new Date(eventDate);
+                            triggerDate.setDate(triggerDate.getDate() - triggerDays);
+                            const today = new Date();
+                            today.setHours(0,0,0,0);
+                            const isPast = triggerDate < today;
+                            return (
+                              <span className={`badge ${isPast ? "badge-warning" : "badge-info"}`} style={{ fontSize: "0.65rem", marginLeft: "auto" }}>
+                                {isPast ? "⚡ Já disparado" : `📅 ${triggerDate.toLocaleDateString("pt-BR")}`}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Matriz / Tabela de Escalas */}
@@ -526,9 +669,10 @@ export default function Escalas() {
                       );
                       const isFilled = !!assign;
                       
-                      // Checar conflitos reais (se estiver escalado)
-                      const conflicts = isFilled ? checkConflicts(assign.volunteerId, activeService.id) : null;
-                      const hasConf = conflicts ? conflicts.doubleBooked || conflicts.blackoutConflict : false;
+                      // Checar conflitos reais (se estiver escalado) — passa o modo de escalação
+                      const conflicts = isFilled ? checkConflicts(assign.volunteerId, activeService.id, activeEscalationMode) : null;
+                      const hasConf = conflicts ? (conflicts.doubleBooked || conflicts.overlapConflict || (activeEscalationMode !== "emergencial" && conflicts.blackoutConflict)) : false;
+                      const hasSoftWarning = conflicts ? conflicts.hasSoftWarnings && activeEscalationMode === "emergencial" : false;
 
                       return (
                         <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.75rem", padding: "0.75rem 1rem", background: isFilled ? "rgba(255, 255, 255, 0.01)" : "rgba(239, 68, 68, 0.02)", border: isFilled ? "1px solid var(--glass-border)" : "1px dashed rgba(239, 68, 68, 0.2)", borderRadius: "var(--radius-md)" }}>
@@ -552,6 +696,11 @@ export default function Escalas() {
                                 {hasConf && (
                                   <span title="Conflito de agendamento ou indisponibilidade detectado!" style={{ color: "#ef4444", animation: "pulse-slow 1.5s infinite" }}>
                                     <AlertTriangle size={16} />
+                                  </span>
+                                )}
+                                {hasSoftWarning && !hasConf && (
+                                  <span title="Aviso: Bloqueio ou limite ignorado (modo emergencial)" style={{ color: "#fbbf24" }}>
+                                    <Zap size={14} />
                                   </span>
                                 )}
 
@@ -816,7 +965,12 @@ export default function Escalas() {
           <div className="modal-container modal-lg">
             <div className="modal-header">
               <div>
-                <h3 style={{ fontSize: "1.15rem" }}>Escalar Voluntário Inteligente</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <h3 style={{ fontSize: "1.15rem" }}>Escalar Voluntário Inteligente</h3>
+                  {activeEscalationMode === "emergencial" && (
+                    <span className="badge badge-danger" style={{ fontSize: "0.65rem" }}>🚨 Modo Emergencial</span>
+                  )}
+                </div>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.8rem", marginTop: "0.15rem" }}>
                   Função: *{getRoleName(activeSlot.ministryId, activeSlot.roleId)}* no culto *{activeService?.title}*
                 </p>
@@ -840,9 +994,13 @@ export default function Escalas() {
                     const overlapConflict = rec.conflicts.overlapConflict;
                     const blackoutConflict = rec.conflicts.blackoutConflict;
                     const limitExceeded = rec.conflicts.limitExceeded;
+                    const isEmergency = activeEscalationMode === "emergencial";
 
-                    // Bloqueio rigoroso: impede duplo agendamento, conflito de horário e indisponibilidade declarada
-                    const shouldBlock = doubleBooked || overlapConflict || blackoutConflict;
+                    // Em modo emergencial: somente duplo agendamento e overlap são bloqueantes
+                    // Em modo padrão: blackout também bloqueia
+                    const shouldBlock = isEmergency
+                      ? (doubleBooked || overlapConflict)
+                      : (doubleBooked || overlapConflict || blackoutConflict);
 
                     // Tag de recomendação (se score for muito baixo e sem conflitos, é o ideal!)
                     const isPerfectFit = rec.score < 50 && !hasConf;
@@ -891,13 +1049,13 @@ export default function Escalas() {
                                 </span>
                               )}
                               {blackoutConflict && (
-                                <span className="badge badge-danger" style={{ fontSize: "0.65rem" }}>
-                                  🚫 Indisponível (Ausência Declarada)
+                                <span className={`badge ${isEmergency ? "badge-warning" : "badge-danger"}`} style={{ fontSize: "0.65rem" }}>
+                                  {isEmergency ? "⚡ Ausência Ignorada (Emergencial)" : "🚫 Indisponível (Ausência Declarada)"}
                                 </span>
                               )}
                               {limitExceeded && (
                                 <span className="badge badge-warning" style={{ fontSize: "0.65rem" }}>
-                                  ⚠️ Frequência Máxima Excedida
+                                  {isEmergency ? "⚡ Limite Ignorado (Emergencial)" : "⚠️ Frequência Máxima Excedida"}
                                 </span>
                               )}
                             </div>
@@ -906,8 +1064,8 @@ export default function Escalas() {
 
                         {/* Coluna 2: Botão para Escalar */}
                         <button
-                          className={`btn ${shouldBlock ? "btn-secondary" : isPerfectFit ? "btn-success" : "btn-primary"}`}
-                          disabled={shouldBlock} // Bloqueia escalamento se houver conflito crítico
+                          className={`btn ${shouldBlock ? "btn-secondary" : isPerfectFit ? "btn-success" : isEmergency && (blackoutConflict || limitExceeded) ? "btn-warning" : "btn-primary"}`}
+                          disabled={shouldBlock}
                           onClick={() => handleAssignVolunteer(vol.id)}
                           style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", cursor: shouldBlock ? "not-allowed" : "pointer" }}
                         >

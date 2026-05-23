@@ -1,5 +1,6 @@
 // -------------------------------------------------------------
 // ESCALA SCHEDULER ENGINE - LOGICA DE CONFLITOS E AUTOESCALA
+// Suporta 3 modos: Padrão, Emergencial e Automático
 // -------------------------------------------------------------
 
 import { getVolunteers, getServices, getAssignments } from "./storage";
@@ -13,10 +14,14 @@ const getMonthYearKey = (dateString) => {
 };
 
 /**
- * Valida todos os conflitos potenciais de um voluntário para um determinado culto
- * @returns {Object} { hasConflicts, doubleBooked, blackoutConflict, limitExceeded }
+ * Valida todos os conflitos potenciais de um voluntário para um determinado culto.
+ * O parâmetro `escalationMode` controla a severidade da validação:
+ *   - "padrao"       → bloqueios de data e limite são impeditivos
+ *   - "emergencial"  → bloqueios e limite são APENAS informativos (não bloqueiam)
+ * Duplo agendamento (mesma pessoa 2x no mesmo evento) e overlap de horário
+ * são SEMPRE impeditivos, independentemente do modo.
  */
-export const checkConflicts = (volunteerId, serviceId) => {
+export const checkConflicts = (volunteerId, serviceId, escalationMode = "padrao") => {
   const volunteers = getVolunteers();
   const services = getServices();
   const assignments = getAssignments();
@@ -25,18 +30,21 @@ export const checkConflicts = (volunteerId, serviceId) => {
   const currentService = services.find(s => s.id === serviceId);
 
   if (!volunteer || !currentService) {
-    return { hasConflicts: false, doubleBooked: false, overlapConflict: false, blackoutConflict: false, limitExceeded: false };
+    return { hasConflicts: false, doubleBooked: false, overlapConflict: false, blackoutConflict: false, limitExceeded: false, isEmergency: false };
   }
 
+  const isEmergency = escalationMode === "emergencial";
   const serviceDate = currentService.date; // YYYY-MM-DD
   const serviceMonthKey = getMonthYearKey(serviceDate);
 
   // 1. DUPLO AGENDAMENTO (Já está escalado em outra função neste mesmo culto)
+  // SEMPRE impeditivo - nunca faz sentido a mesma pessoa 2x no mesmo evento
   const isDoubleBooked = assignments.some(
     a => a.serviceId === serviceId && a.volunteerId === volunteerId
   );
 
   // 1B. CONFLITO DE OUTRO CULTO NO MESMO HORÁRIO (1 pessoa em 2 lugares diferentes)
+  // SEMPRE impeditivo - fisicamente impossível
   const otherScheduledAssignments = assignments.filter(
     a => a.volunteerId === volunteerId && a.serviceId !== serviceId
   );
@@ -50,40 +58,39 @@ export const checkConflicts = (volunteerId, serviceId) => {
   // 2. CONFLITO DE INDISPONIBILIDADE (Datas e Horários Bloqueados)
   const hasBlackoutConflict = volunteer.blackouts && volunteer.blackouts.some(blackout => {
     if (typeof blackout === "string") {
-      // Bloqueio de dia inteiro legado
       return blackout === serviceDate;
     } else if (blackout && typeof blackout === "object") {
-      // Bloqueio estruturado (Dia inteiro ou horário específico)
       if (blackout.date !== serviceDate) return false;
-      if (blackout.allDay) return true; // Bloqueio total do dia
-      
-      // Bloqueio por intervalo de horas
-      const serviceTime = currentService.time; // formato "HH:MM"
+      if (blackout.allDay) return true;
+      const serviceTime = currentService.time;
       if (!blackout.startTime || !blackout.endTime || !serviceTime) return false;
-      
       return serviceTime >= blackout.startTime && serviceTime <= blackout.endTime;
     }
     return false;
   });
 
   // 3. LIMITE MENSAL EXCEDIDO
-  // Filtra todos os cultos do mesmo mês
   const servicesInMonth = services.filter(s => getMonthYearKey(s.date) === serviceMonthKey);
   const serviceIdsInMonth = servicesInMonth.map(s => s.id);
-  
-  // Conta em quantos cultos deste mês o voluntário está escalado
   const volunteerAssignmentsInMonth = assignments.filter(
     a => a.volunteerId === volunteerId && serviceIdsInMonth.includes(a.serviceId)
   );
-  
   const isLimitExceeded = volunteerAssignmentsInMonth.length >= (volunteer.maxMonthlyServices || 2);
 
+  // No modo EMERGENCIAL: blackout e limite NÃO bloqueiam, só avisam
+  // Duplo agendamento e overlap são SEMPRE bloqueantes
+  const hardBlock = isDoubleBooked || hasTimeOverlapConflict;
+  const softBlock = hasBlackoutConflict || isLimitExceeded;
+
   return {
-    hasConflicts: isDoubleBooked || hasTimeOverlapConflict || hasBlackoutConflict || isLimitExceeded,
+    hasConflicts: isEmergency ? hardBlock : (hardBlock || softBlock),
     doubleBooked: isDoubleBooked,
     overlapConflict: hasTimeOverlapConflict,
     blackoutConflict: hasBlackoutConflict,
     limitExceeded: isLimitExceeded,
+    isEmergency,
+    // Flag auxiliar: conflitos "suaves" que existem mas são bypassáveis em emergência
+    hasSoftWarnings: softBlock,
     currentCount: volunteerAssignmentsInMonth.length,
     maxCount: volunteer.maxMonthlyServices || 2
   };
@@ -91,14 +98,17 @@ export const checkConflicts = (volunteerId, serviceId) => {
 
 /**
  * Retorna a lista de voluntários recomendados para uma função específica, ordenados por prioridade
+ * Aceita o modo de escalação para ajustar a severidade dos conflitos
  */
-export const getRecommendedVolunteers = (serviceId, ministryId, roleId) => {
+export const getRecommendedVolunteers = (serviceId, ministryId, roleId, escalationMode = "padrao") => {
   const volunteers = getVolunteers();
   const assignments = getAssignments();
   const services = getServices();
   
   const currentService = services.find(s => s.id === serviceId);
   if (!currentService) return [];
+
+  const isEmergency = escalationMode === "emergencial";
 
   // 1. Filtrar quem possui a habilidade correspondente
   const qualifiedVolunteers = volunteers.filter(v => 
@@ -107,13 +117,10 @@ export const getRecommendedVolunteers = (serviceId, ministryId, roleId) => {
 
   // 2. Calcular dados de histórico e conflito para cada um
   const volunteersWithScores = qualifiedVolunteers.map(volunteer => {
-    const conflicts = checkConflicts(volunteer.id, serviceId);
+    const conflicts = checkConflicts(volunteer.id, serviceId, escalationMode);
     
-    // Calcular quando foi a última vez que serviu (histórico de escalas)
-    // Para simplificar, contamos o total de agendamentos no sistema para balanceamento de carga
     const totalAssignments = assignments.filter(a => a.volunteerId === volunteer.id).length;
     
-    // Agendamentos no mês atual
     const serviceMonthKey = getMonthYearKey(currentService.date);
     const servicesInMonth = services.filter(s => getMonthYearKey(s.date) === serviceMonthKey);
     const serviceIdsInMonth = servicesInMonth.map(s => s.id);
@@ -124,15 +131,21 @@ export const getRecommendedVolunteers = (serviceId, ministryId, roleId) => {
     // Pontuação de prioridade (Menor pontuação = Recomendado primeiro)
     let score = 0;
     
-    // Penalidades severas
-    if (conflicts.blackoutConflict) score += 1000; // Crítico: Indisponibilidade declarada
-    if (conflicts.doubleBooked) score += 500;       // Crítico: Já está escalado neste culto
-    if (conflicts.overlapConflict) score += 500;    // Crítico: Já está escalado em outro local no mesmo horário
+    // Penalidades SEMPRE aplicadas (fisicamente impossível)
+    if (conflicts.doubleBooked) score += 500;
+    if (conflicts.overlapConflict) score += 500;
 
-    // Penalidade moderada
-    if (conflicts.limitExceeded) score += 100;     // Ultrapassou limite preferido
+    if (isEmergency) {
+      // Em emergência: blackout e limite são penalidades moderadas (não bloqueiam)
+      if (conflicts.blackoutConflict) score += 50;
+      if (conflicts.limitExceeded) score += 30;
+    } else {
+      // Em modo padrão: blackout é crítico, limite é moderado
+      if (conflicts.blackoutConflict) score += 1000;
+      if (conflicts.limitExceeded) score += 100;
+    }
 
-    // Balanceamento de carga: priorizar quem serviu menos no mês e no total
+    // Balanceamento de carga
     score += (monthlyAssignments * 10);
     score += totalAssignments;
 
@@ -145,52 +158,47 @@ export const getRecommendedVolunteers = (serviceId, ministryId, roleId) => {
     };
   });
 
-  // Ordena por pontuação (menor pontuação = melhor sugestão)
   return volunteersWithScores.sort((a, b) => a.score - b.score);
 };
 
 /**
  * MOTOR DE AUTOESCALA DE 1-CLIQUE
- * Preenche de forma inteligente os cargos ainda vazios em um culto específico
+ * Preenche de forma inteligente os cargos ainda vazios em um culto específico.
+ * Respeita o modo de escalação definido no culto.
  */
-export const runAutoScaleForService = (serviceId) => {
+export const runAutoScaleForService = (serviceId, escalationModeOverride = null) => {
   const services = getServices();
   const currentService = services.find(s => s.id === serviceId);
   if (!currentService) return { success: false, message: "Culto não encontrado" };
 
+  // Usa o modo definido no culto, ou o override passado como parâmetro
+  const escalationMode = escalationModeOverride || currentService.escalationMode || "padrao";
+  const isEmergency = escalationMode === "emergencial";
+
   const currentAssignments = getAssignments();
   
-  // Lista de cargos necessários neste culto
   const requiredRoles = currentService.requiredRoles || [];
-  
-  // Atribuições que já existem para este culto
   const serviceAssignments = currentAssignments.filter(a => a.serviceId === serviceId);
   
   let newAssignmentsCount = 0;
   const updatedAssignments = [...currentAssignments];
 
-  // Loop em cada cargo necessário
   for (const roleReq of requiredRoles) {
-    // Checar se este cargo já está preenchido
     const isFilled = serviceAssignments.some(
       a => a.ministryId === roleReq.ministryId && a.roleId === roleReq.roleId
     );
     
-    if (isFilled) continue; // Pula se já estiver escalado alguém
+    if (isFilled) continue;
     
-    // Encontrar voluntários recomendados para este cargo
-    // A função getRecommendedVolunteers lê de storage. Como atualizamos localmente a lista,
-    // precisamos simular o check de conflitos atualizado na hora para evitar duplo agendamento!
-    const recommendations = getRecommendedVolunteers(serviceId, roleReq.ministryId, roleReq.roleId);
+    const recommendations = getRecommendedVolunteers(serviceId, roleReq.ministryId, roleReq.roleId, escalationMode);
     
-    // Filtrar candidatos disponíveis (excluir quem já escalamos nesta mesma iteração!)
     const availableCandidate = recommendations.find(rec => {
-      // Checar se o voluntário já foi escalado na lista atualizada para este mesmo culto
+      // Sempre impede duplo agendamento no mesmo culto
       const alreadyScheduledInThisRun = updatedAssignments.some(
         a => a.serviceId === serviceId && a.volunteerId === rec.volunteer.id
       );
       
-      // Exclui conflitos críticos na autoescala (Duplo agendamento, Ausência e Conflito de Horário)
+      // Sempre impede overlap de horário (fisicamente impossível)
       const hasOverlap = updatedAssignments.some(a => {
         if (a.volunteerId !== rec.volunteer.id) return false;
         const otherService = services.find(s => s.id === a.serviceId);
@@ -198,7 +206,13 @@ export const runAutoScaleForService = (serviceId) => {
         return otherService.date === currentService.date && otherService.time === currentService.time;
       });
 
-      return !alreadyScheduledInThisRun && !hasOverlap && !rec.conflicts.blackoutConflict;
+      if (alreadyScheduledInThisRun || hasOverlap) return false;
+
+      // Em modo emergencial: ignora blackout e limite (chama todos)
+      // Em modo padrão: respeita blackout estritamente
+      if (!isEmergency && rec.conflicts.blackoutConflict) return false;
+
+      return true;
     });
 
     if (availableCandidate) {
@@ -208,7 +222,7 @@ export const runAutoScaleForService = (serviceId) => {
         ministryId: roleReq.ministryId,
         roleId: roleReq.roleId,
         volunteerId: availableCandidate.volunteer.id,
-        status: "pending" // Novas escalas da autoescala iniciam pendentes de confirmação
+        status: "pending"
       });
       newAssignmentsCount++;
     }
@@ -217,6 +231,7 @@ export const runAutoScaleForService = (serviceId) => {
   return {
     success: true,
     newAssignments: updatedAssignments,
-    count: newAssignmentsCount
+    count: newAssignmentsCount,
+    mode: escalationMode
   };
 };

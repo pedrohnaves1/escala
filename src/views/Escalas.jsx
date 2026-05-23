@@ -837,8 +837,12 @@ export default function Escalas() {
                     const vol = rec.volunteer;
                     const hasConf = rec.conflicts.hasConflicts;
                     const doubleBooked = rec.conflicts.doubleBooked;
+                    const overlapConflict = rec.conflicts.overlapConflict;
                     const blackoutConflict = rec.conflicts.blackoutConflict;
                     const limitExceeded = rec.conflicts.limitExceeded;
+
+                    // Bloqueio rigoroso: impede duplo agendamento, conflito de horário e indisponibilidade declarada
+                    const shouldBlock = doubleBooked || overlapConflict || blackoutConflict;
 
                     // Tag de recomendação (se score for muito baixo e sem conflitos, é o ideal!)
                     const isPerfectFit = rec.score < 50 && !hasConf;
@@ -852,9 +856,9 @@ export default function Escalas() {
                           display: "flex",
                           justifyContent: "space-between",
                           alignItems: "center",
-                          background: blackoutConflict || doubleBooked ? "rgba(239, 68, 68, 0.03)" : "var(--glass-bg)",
+                          background: shouldBlock ? "rgba(239, 68, 68, 0.03)" : "var(--glass-bg)",
                           border: isPerfectFit ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid var(--glass-border)",
-                          opacity: blackoutConflict ? 0.6 : 1
+                          opacity: shouldBlock ? 0.75 : 1
                         }}
                       >
                         {/* Coluna 1: Nome do voluntário e status */}
@@ -881,6 +885,11 @@ export default function Escalas() {
                                   ⚠️ Já Escalado Neste Culto (Duplo Agendamento)
                                 </span>
                               )}
+                              {overlapConflict && (
+                                <span className="badge badge-danger" style={{ fontSize: "0.65rem" }}>
+                                  ⚠️ Conflito de Horário (Já em outro culto no mesmo dia/hora)
+                                </span>
+                              )}
                               {blackoutConflict && (
                                 <span className="badge badge-danger" style={{ fontSize: "0.65rem" }}>
                                   🚫 Indisponível (Ausência Declarada)
@@ -897,12 +906,12 @@ export default function Escalas() {
 
                         {/* Coluna 2: Botão para Escalar */}
                         <button
-                          className={`btn ${blackoutConflict ? "btn-secondary" : isPerfectFit ? "btn-success" : "btn-primary"}`}
-                          disabled={blackoutConflict} // Bloqueia escalamento se estiver em férias/bloqueio
+                          className={`btn ${shouldBlock ? "btn-secondary" : isPerfectFit ? "btn-success" : "btn-primary"}`}
+                          disabled={shouldBlock} // Bloqueia escalamento se houver conflito crítico
                           onClick={() => handleAssignVolunteer(vol.id)}
-                          style={{ padding: "0.45rem 1rem", fontSize: "0.8rem" }}
+                          style={{ padding: "0.45rem 1rem", fontSize: "0.8rem", cursor: shouldBlock ? "not-allowed" : "pointer" }}
                         >
-                          {blackoutConflict ? "Bloqueado" : "Escalar"}
+                          {shouldBlock ? "Bloqueado" : "Escalar"}
                         </button>
                       </div>
                     );

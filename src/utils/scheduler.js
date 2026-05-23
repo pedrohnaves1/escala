@@ -25,7 +25,7 @@ export const checkConflicts = (volunteerId, serviceId) => {
   const currentService = services.find(s => s.id === serviceId);
 
   if (!volunteer || !currentService) {
-    return { hasConflicts: false, doubleBooked: false, blackoutConflict: false, limitExceeded: false };
+    return { hasConflicts: false, doubleBooked: false, overlapConflict: false, blackoutConflict: false, limitExceeded: false };
   }
 
   const serviceDate = currentService.date; // YYYY-MM-DD
@@ -35,6 +35,17 @@ export const checkConflicts = (volunteerId, serviceId) => {
   const isDoubleBooked = assignments.some(
     a => a.serviceId === serviceId && a.volunteerId === volunteerId
   );
+
+  // 1B. CONFLITO DE OUTRO CULTO NO MESMO HORÁRIO (1 pessoa em 2 lugares diferentes)
+  const otherScheduledAssignments = assignments.filter(
+    a => a.volunteerId === volunteerId && a.serviceId !== serviceId
+  );
+  
+  const hasTimeOverlapConflict = otherScheduledAssignments.some(a => {
+    const otherService = services.find(s => s.id === a.serviceId);
+    if (!otherService) return false;
+    return otherService.date === currentService.date && otherService.time === currentService.time;
+  });
 
   // 2. CONFLITO DE INDISPONIBILIDADE (Datas e Horários Bloqueados)
   const hasBlackoutConflict = volunteer.blackouts && volunteer.blackouts.some(blackout => {
@@ -68,8 +79,9 @@ export const checkConflicts = (volunteerId, serviceId) => {
   const isLimitExceeded = volunteerAssignmentsInMonth.length >= (volunteer.maxMonthlyServices || 2);
 
   return {
-    hasConflicts: isDoubleBooked || hasBlackoutConflict || isLimitExceeded,
+    hasConflicts: isDoubleBooked || hasTimeOverlapConflict || hasBlackoutConflict || isLimitExceeded,
     doubleBooked: isDoubleBooked,
+    overlapConflict: hasTimeOverlapConflict,
     blackoutConflict: hasBlackoutConflict,
     limitExceeded: isLimitExceeded,
     currentCount: volunteerAssignmentsInMonth.length,
@@ -115,6 +127,7 @@ export const getRecommendedVolunteers = (serviceId, ministryId, roleId) => {
     // Penalidades severas
     if (conflicts.blackoutConflict) score += 1000; // Crítico: Indisponibilidade declarada
     if (conflicts.doubleBooked) score += 500;       // Crítico: Já está escalado neste culto
+    if (conflicts.overlapConflict) score += 500;    // Crítico: Já está escalado em outro local no mesmo horário
 
     // Penalidade moderada
     if (conflicts.limitExceeded) score += 100;     // Ultrapassou limite preferido
@@ -177,12 +190,20 @@ export const runAutoScaleForService = (serviceId) => {
         a => a.serviceId === serviceId && a.volunteerId === rec.volunteer.id
       );
       
-      // Exclui conflitos críticos na autoescala (Duplo agendamento e Ausência)
-      return !alreadyScheduledInThisRun && !rec.conflicts.blackoutConflict;
+      // Exclui conflitos críticos na autoescala (Duplo agendamento, Ausência e Conflito de Horário)
+      const hasOverlap = updatedAssignments.some(a => {
+        if (a.volunteerId !== rec.volunteer.id) return false;
+        const otherService = services.find(s => s.id === a.serviceId);
+        if (!otherService) return false;
+        return otherService.date === currentService.date && otherService.time === currentService.time;
+      });
+
+      return !alreadyScheduledInThisRun && !hasOverlap && !rec.conflicts.blackoutConflict;
     });
 
     if (availableCandidate) {
       updatedAssignments.push({
+        id: `a_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         serviceId: serviceId,
         ministryId: roleReq.ministryId,
         roleId: roleReq.roleId,

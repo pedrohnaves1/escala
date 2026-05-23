@@ -97,6 +97,8 @@ export default function Dashboard({ setActiveTab }) {
 
   useEffect(() => {
     loadData();
+    window.addEventListener("escala-db-synced", loadData);
+    return () => window.removeEventListener("escala-db-synced", loadData);
   }, []);
 
   // Importar arquivo JSON de backup

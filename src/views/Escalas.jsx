@@ -95,6 +95,8 @@ export default function Escalas() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener("escala-db-synced", loadData);
+    return () => window.removeEventListener("escala-db-synced", loadData);
   }, []);
 
   const activeService = services.find(s => s.id === selectedServiceId);

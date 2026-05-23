@@ -47,6 +47,8 @@ export default function Voluntarios() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener("escala-db-synced", loadData);
+    return () => window.removeEventListener("escala-db-synced", loadData);
   }, []);
 
   // Filtragem dos voluntários

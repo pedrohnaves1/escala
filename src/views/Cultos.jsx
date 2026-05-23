@@ -59,6 +59,8 @@ export default function Cultos() {
 
   useEffect(() => {
     loadData();
+    window.addEventListener("escala-db-synced", loadData);
+    return () => window.removeEventListener("escala-db-synced", loadData);
   }, []);
 
   // --- CONTROLE DE CULTOS ---

@@ -9,7 +9,8 @@ import {
   Crown,
   Building2,
   UserCheck,
-  Smile
+  Smile,
+  Trophy
 } from "lucide-react";
 
 // Views
@@ -20,6 +21,7 @@ import Cultos from "./views/Cultos";
 import SuperAdmin from "./views/SuperAdmin";
 import OrgAdmin from "./views/OrgAdmin";
 import VoluntarioView from "./views/VoluntarioView";
+import Comunidade from "./views/Comunidade";
 
 // Storage
 import { initializeStorage } from "./utils/storage";
@@ -89,31 +91,66 @@ function App() {
                 <Settings size={20} />
                 <span>Estrutura</span>
               </button>
+
+              <button
+                className={`nav-item ${activeTab === "comunidade" ? "active" : ""}`}
+                onClick={() => setActiveTab("comunidade")}
+              >
+                <Trophy size={20} />
+                <span>Destaques</span>
+              </button>
             </>
           ) : userRole === "Administrador da Matriz" ? (
-            <button
-              className="nav-item active"
-              onClick={() => setActiveTab("orgadmin")}
-            >
-              <Building2 size={20} />
-              <span>Matriz</span>
-            </button>
+            <>
+              <button
+                className={`nav-item ${activeTab === "orgadmin" ? "active" : ""}`}
+                onClick={() => setActiveTab("orgadmin")}
+              >
+                <Building2 size={20} />
+                <span>Matriz</span>
+              </button>
+              <button
+                className={`nav-item ${activeTab === "comunidade" ? "active" : ""}`}
+                onClick={() => setActiveTab("comunidade")}
+              >
+                <Trophy size={20} />
+                <span>Destaques</span>
+              </button>
+            </>
           ) : userRole === "Voluntário" ? (
-            <button
-              className="nav-item active"
-              onClick={() => setActiveTab("voluntarioview")}
-            >
-              <Smile size={20} />
-              <span>Portal do Voluntário</span>
-            </button>
+            <>
+              <button
+                className={`nav-item ${activeTab === "voluntarioview" ? "active" : ""}`}
+                onClick={() => setActiveTab("voluntarioview")}
+              >
+                <Smile size={20} />
+                <span>Portal do Voluntário</span>
+              </button>
+              <button
+                className={`nav-item ${activeTab === "comunidade" ? "active" : ""}`}
+                onClick={() => setActiveTab("comunidade")}
+              >
+                <Trophy size={20} />
+                <span>Destaques</span>
+              </button>
+            </>
           ) : (
-            <button
-              className="nav-item active"
-              onClick={() => setActiveTab("superadmin")}
-            >
-              <Crown size={20} />
-              <span>SaaS Admin</span>
-            </button>
+            <>
+              <button
+                className={`nav-item ${activeTab === "superadmin" ? "active" : ""}`}
+                onClick={() => setActiveTab("superadmin")}
+              >
+                <Crown size={20} />
+                <span>SaaS Admin</span>
+              </button>
+              <button
+                className={`nav-item ${activeTab === "comunidade" ? "active" : ""}`}
+                onClick={() => setActiveTab("comunidade")}
+              >
+                <Trophy size={20} />
+                <span>Destaques</span>
+              </button>
+            </>
           )}
         </nav>
 
@@ -177,15 +214,21 @@ function App() {
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <main className="main-content">
-        {userRole === "Super Admin" && <SuperAdmin />}
-        {userRole === "Administrador da Matriz" && <OrgAdmin />}
-        {userRole === "Voluntário" && <VoluntarioView />}
-        {userRole === "Líder de Sede" && (
+        {activeTab === "comunidade" ? (
+          <Comunidade />
+        ) : (
           <>
-            {activeTab === "dashboard" && <Dashboard setActiveTab={setActiveTab} />}
-            {activeTab === "escalas" && <Escalas />}
-            {activeTab === "voluntarios" && <Voluntarios />}
-            {activeTab === "cultos" && <Cultos />}
+            {userRole === "Super Admin" && <SuperAdmin />}
+            {userRole === "Administrador da Matriz" && <OrgAdmin />}
+            {userRole === "Voluntário" && <VoluntarioView />}
+            {userRole === "Líder de Sede" && (
+              <>
+                {activeTab === "dashboard" && <Dashboard setActiveTab={setActiveTab} />}
+                {activeTab === "escalas" && <Escalas />}
+                {activeTab === "voluntarios" && <Voluntarios />}
+                {activeTab === "cultos" && <Cultos />}
+              </>
+            )}
           </>
         )}
       </main>

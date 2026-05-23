@@ -11,19 +11,13 @@ import {
   ArrowRight,
   UserCheck,
   Music,
-  Download,
-  Upload,
-  RefreshCw,
   Sparkles
 } from "lucide-react";
 import {
   getVolunteers,
   getServices,
   getAssignments,
-  getMinistries,
-  exportBackup,
-  importBackup,
-  resetToDefaults
+  getMinistries
 } from "../utils/storage";
 
 export default function Dashboard({ setActiveTab }) {
@@ -101,24 +95,6 @@ export default function Dashboard({ setActiveTab }) {
     return () => window.removeEventListener("escala-db-synced", loadData);
   }, []);
 
-  // Importar arquivo JSON de backup
-  const handleImportFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = importBackup(event.target.result);
-      if (result.success) {
-        alert("Backup restaurado com sucesso!");
-        loadData();
-      } else {
-        alert(`Falha na restauração: ${result.error}`);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   // Helper para achar nome do voluntário
   const getVolunteerName = (id) => {
     const v = volunteers.find(vol => vol.id === id);
@@ -146,15 +122,7 @@ export default function Dashboard({ setActiveTab }) {
           <h1>Painel de Controle</h1>
           <p>Visão geral rápida das equipes, próximos cultos e confirmações.</p>
         </div>
-        <div className="flex gap-2" style={{ display: "flex", gap: "0.5rem" }}>
-          <button className="btn btn-secondary" onClick={exportBackup}>
-            <Download size={16} /> Exportar Backup
-          </button>
-          <label className="btn btn-secondary" style={{ cursor: "pointer" }}>
-            <Upload size={16} /> Importar Backup
-            <input type="file" accept=".json" onChange={handleImportFile} style={{ display: "none" }} />
-          </label>
-        </div>
+
       </div>
 
       {/* Grid de Métricas */}
@@ -325,13 +293,7 @@ export default function Dashboard({ setActiveTab }) {
               <button className="btn btn-secondary" onClick={() => setActiveTab("voluntarios")}>
                 Adicionar Novo Membro
               </button>
-              <button className="btn btn-secondary" style={{ color: "#ef4444" }} onClick={() => {
-                if (window.confirm("Atenção: Isso irá apagar todos os dados atuais e restaurar as configurações padrão de fábrica. Deseja prosseguir?")) {
-                  resetToDefaults();
-                }
-              }}>
-                <RefreshCw size={14} /> Restaurar Padrões de Teste
-              </button>
+
             </div>
           </div>
         </div>

@@ -8,7 +8,8 @@ import {
   Heart,
   Crown,
   Building2,
-  UserCheck
+  UserCheck,
+  Smile
 } from "lucide-react";
 
 // Views
@@ -18,6 +19,7 @@ import Voluntarios from "./views/Voluntarios";
 import Cultos from "./views/Cultos";
 import SuperAdmin from "./views/SuperAdmin";
 import OrgAdmin from "./views/OrgAdmin";
+import VoluntarioView from "./views/VoluntarioView";
 
 // Storage
 import { initializeStorage } from "./utils/storage";
@@ -37,6 +39,8 @@ function App() {
       setActiveTab("superadmin");
     } else if (role === "Administrador da Matriz") {
       setActiveTab("orgadmin");
+    } else if (role === "Voluntário") {
+      setActiveTab("voluntarioview");
     } else {
       setActiveTab("dashboard");
     }
@@ -94,6 +98,14 @@ function App() {
               <Building2 size={20} />
               <span>Matriz</span>
             </button>
+          ) : userRole === "Voluntário" ? (
+            <button
+              className="nav-item active"
+              onClick={() => setActiveTab("voluntarioview")}
+            >
+              <Smile size={20} />
+              <span>Portal do Voluntário</span>
+            </button>
           ) : (
             <button
               className="nav-item active"
@@ -135,6 +147,9 @@ function App() {
                 <option value="Líder de Sede" style={{ background: "var(--bg-secondary)", color: "var(--text-primary)" }}>
                   Líder de Sede (Local)
                 </option>
+                <option value="Voluntário" style={{ background: "var(--bg-secondary)", color: "var(--text-primary)" }}>
+                  Voluntário (Membro)
+                </option>
                 <option value="Administrador da Matriz" style={{ background: "var(--bg-secondary)", color: "var(--text-primary)" }}>
                   Administrador da Matriz
                 </option>
@@ -144,7 +159,7 @@ function App() {
               </select>
               {/* Premium icon overlay in select */}
               <div style={{ position: "absolute", right: "0.8rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--primary)", display: "flex", alignItems: "center" }}>
-                {userRole === "Super Admin" ? <Crown size={14} /> : userRole === "Administrador da Matriz" ? <Building2 size={14} /> : <UserCheck size={14} />}
+                {userRole === "Super Admin" ? <Crown size={14} /> : userRole === "Administrador da Matriz" ? <Building2 size={14} /> : userRole === "Voluntário" ? <Smile size={14} /> : <UserCheck size={14} />}
               </div>
             </div>
           </div>
@@ -164,6 +179,7 @@ function App() {
       <main className="main-content">
         {userRole === "Super Admin" && <SuperAdmin />}
         {userRole === "Administrador da Matriz" && <OrgAdmin />}
+        {userRole === "Voluntário" && <VoluntarioView />}
         {userRole === "Líder de Sede" && (
           <>
             {activeTab === "dashboard" && <Dashboard setActiveTab={setActiveTab} />}

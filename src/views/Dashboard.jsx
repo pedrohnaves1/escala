@@ -300,7 +300,7 @@ export default function Dashboard({ setActiveTab }) {
                       <div>
                         <h5 style={{ fontWeight: 600, fontSize: "0.875rem" }}>{getVolunteerName(p.volunteerId)}</h5>
                         <p style={{ color: "var(--text-secondary)", fontSize: "0.75rem", marginTop: "0.15rem" }}>
-                          {s.title} • {getRoleName(p.ministryId, p.roleId)}
+                          {s.title.split(" - ")[0]} às {s.time} • {getRoleName(p.ministryId, p.roleId)}
                         </p>
                       </div>
                       <span className="badge badge-warning" style={{ fontSize: "0.7rem" }}>Aguardando</span>

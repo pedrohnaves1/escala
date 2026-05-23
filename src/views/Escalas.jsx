@@ -732,7 +732,7 @@ export default function Escalas() {
                     </div>
 
                     {/* Formulário para Adicionar Música */}
-                    <form onSubmit={handleAddSong} style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+                    <form onSubmit={handleAddSong} className="setlist-form" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
                       <input
                         type="text"
                         className="form-input"
